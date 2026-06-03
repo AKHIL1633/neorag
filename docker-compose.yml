@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+
+  # ── Neo4j Knowledge Graph Database ─────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.20
+    container_name: neorag-neo4j
+    ports:
+      - "7474:7474"   # Neo4j browser UI
+      - "7687:7687"   # Bolt protocol
+    environment:
+      NEO4J_AUTH: neo4j/password
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_heap_max__size: 512m
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "password", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (Celery broker + caching) ────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: neorag-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: neorag-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB:       neorag
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  # ── NeoRAG FastAPI Application ──────────────────────────────────────────────
+  app:
+    build: .
+    container_name: neorag-app
+    ports:
+      - "8000:8000"
+    environment:
+      NEO4J_URI:      bolt://neo4j:7687
+      NEO4J_USER:     neo4j
+      NEO4J_PASSWORD: password
+      DATABASE_URL:   postgresql://postgres:password@postgres:5432/neorag
+      REDIS_URL:      redis://redis:6379/0
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app   # hot reload in dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  neo4j_data:
+  postgres_data:
