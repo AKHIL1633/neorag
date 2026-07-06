@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.services.nlp_service import analyze_text
 from app.services.graph_service import build_knowledge_graph
+from app.services.vector_service import index_document
 
 
 # ── JSON Extraction ───────────────────────────────────────────────────────────
@@ -86,13 +87,15 @@ def extract_entities_from_json(data: Dict[str, Any]) -> Dict[str, Any]:
 
 # ── Document Processing Pipeline ─────────────────────────────────────────────
 
-def process_document(title: str, content: str, metadata: Dict = {}) -> Dict[str, Any]:
+def process_document(title: str, content: str, metadata: Optional[Dict] = None) -> Dict[str, Any]:
     """
     End-to-end document processing pipeline:
     1. NLP analysis (NER + sentiment + coreference)
     2. Knowledge graph construction
-    3. Return processing results
+    3. Vector indexing (semantic search — see app.services.vector_service)
+    4. Return processing results
     """
+    metadata = metadata or {}
     start    = time.time()
     doc_id   = str(uuid.uuid4())[:12]
 
@@ -105,10 +108,15 @@ def process_document(title: str, content: str, metadata: Dict = {}) -> Dict[str,
     entities_dict = [e.model_dump() for e in nlp_result.entities]
     graph_result  = build_knowledge_graph(entities_dict, title)
 
+    # Step 3: Index into the vector store for semantic retrieval. Degrades
+    # gracefully (returns 0) if Qdrant/sentence-transformers aren't available.
+    chunks_indexed = index_document(doc_id, title, content)
+
     elapsed = round((time.time() - start) * 1000, 2)
     logger.info(f"Document '{title}' processed in {elapsed}ms — "
                 f"{graph_result['nodes_created']} nodes, "
-                f"{graph_result['relationships']} relationships")
+                f"{graph_result['relationships']} relationships, "
+                f"{chunks_indexed} vector chunks")
 
     return {
         "id":                  doc_id,

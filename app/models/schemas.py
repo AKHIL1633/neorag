@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -14,16 +14,18 @@ class TokenData(BaseModel):
     username: Optional[str] = None
 
 class UserCreate(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=3, max_length=64)
+    email: str
+    password: str = Field(..., min_length=10, description="Minimum 10 characters, at least one digit")
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
+    email: str
+    is_admin: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ── Document Ingestion ────────────────────────────────────────────────────────
@@ -116,6 +118,8 @@ class QARequest(BaseModel):
     max_tokens:  int  = Field(default=512, ge=64, le=2048)
 
 class QAResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     question:    str
     answer:      str
     context:     List[str]     # Graph nodes/facts used
@@ -147,3 +151,19 @@ class JSONExtractionResponse(BaseModel):
     nodes_created:   int
     relationships:   int
     processing_time_ms: float
+
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
+
+class BenchmarkItemResult(BaseModel):
+    question: str
+    answer: str
+    expected_entity: str
+    entity_found: bool
+    judge_score: float
+
+class BenchmarkRunResponse(BaseModel):
+    results: List[BenchmarkItemResult]
+    mean_judge_score: float
+    entity_hit_rate: float
+    item_count: int

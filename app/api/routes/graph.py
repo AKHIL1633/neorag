@@ -7,6 +7,7 @@ from app.services.graph_service import (
     create_entity_node, create_relationship
 )
 from app.core.auth import get_current_user
+from app.models.user_model import User
 
 router = APIRouter(prefix="/graph", tags=["Knowledge Graph"])
 
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/graph", tags=["Knowledge Graph"])
     response_model=GraphStatsResponse,
     summary="Get knowledge graph statistics"
 )
-async def graph_stats(current_user: dict = Depends(get_current_user)):
+async def graph_stats(current_user: User = Depends(get_current_user)):
     """
     Get statistics about the Neo4j knowledge graph:
     - Total nodes and their types (PERSON, ORG, GPE, etc.)
@@ -32,7 +33,7 @@ async def graph_stats(current_user: dict = Depends(get_current_user)):
 )
 async def cypher_query(
     request: GraphQueryRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Execute a **Cypher query** directly against the Neo4j knowledge graph.
@@ -60,7 +61,7 @@ async def cypher_query(
 )
 async def entity_context(
     entity_name: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get all graph relationships for a named entity.
@@ -84,10 +85,13 @@ async def entity_context(
 async def create_node(
     name:  str,
     label: str = "MISC",
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Manually create or merge an entity node in the knowledge graph."""
-    node_id = create_entity_node(name, label)
+    try:
+        node_id = create_entity_node(name, label)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {"node_id": node_id, "name": name, "label": label, "status": "created"}
 
 
@@ -99,10 +103,13 @@ async def add_relationship(
     source:   str,
     target:   str,
     relation: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a directed relationship between two entity nodes."""
-    create_relationship(source, target, relation)
+    try:
+        create_relationship(source, target, relation)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return {
         "source":   source,
         "relation": relation,

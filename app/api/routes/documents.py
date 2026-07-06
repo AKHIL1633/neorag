@@ -5,6 +5,7 @@ from app.models.schemas import (
 )
 from app.services.ingestion import process_document, process_json_document
 from app.core.auth import get_current_user
+from app.models.user_model import User
 
 router = APIRouter(prefix="/documents", tags=["Document Ingestion"])
 
@@ -16,7 +17,7 @@ router = APIRouter(prefix="/documents", tags=["Document Ingestion"])
 )
 async def ingest_document(
     request: DocumentIngest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     **Full document ingestion pipeline:**
@@ -45,7 +46,7 @@ async def ingest_document(
 )
 async def ingest_json(
     request: JSONExtractionRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     **JSON data extraction and knowledge graph building:**
